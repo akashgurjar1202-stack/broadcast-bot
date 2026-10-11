@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime
 import http.server
+import socketserver
 import threading
 from telegram import Update
 from telegram.ext import (
@@ -19,19 +20,6 @@ from telegram.ext import (
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
-
-# Render Web Service ke liye background HTTP Server (UptimeRobot ke liye)
-def run_http_server():
-    port = int(os.getenv("PORT", 10000))
-    class SimpleHandler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is alive and running!")
-        def log_message(self, format, *args):
-            return # Log spam rokne ke liye
-
-threading.Thread(target=run_http_server, daemon=True).start()
 
 # Configuration from Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -80,7 +68,7 @@ def save_broadcast_log(log_entry):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     save_user(user_id)
-    await update.message.reply_text("YAHA PROOF BHEJ DE 👇👇")
+    await update.message.reply_text("HAYA PROOF BHEJ DE 👇👇")
 
 async def broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -156,7 +144,8 @@ async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Broadcast operation cancel kar diya gaya hai.")
     return ConversationHandler.END
 
-def main():
+# Telegram Bot ko background thread me chalane ke liye
+def run_telegram_bot():
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN nahi mila!")
         return
@@ -178,9 +167,24 @@ def main():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(broadcast_handler)
 
-    print("Bot chalu ho raha hai...")
+    print("Telegram Bot polling shuru ho rahi hai...")
     app.run_polling()
 
 if __name__ == "__main__":
-    main()
-    
+    # Telegram Bot ko background me shuru karein
+    threading.Thread(target=run_telegram_bot, daemon=True).start()
+
+    # Render ke liye Main thread me HTTP Server chalayein taaki deployment successful dikhe
+    PORT = int(os.getenv("PORT", 10000))
+    class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is active and running successfully!")
+        def log_message(self, format, *args):
+            return
+
+    with socketserver.TCPServer(("", PORT), HealthCheckHandler) as httpd:
+        print(f"HTTP Server port {PORT} par chal raha hai...")
+        httpd.serve_forever()
+        
