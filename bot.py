@@ -63,7 +63,7 @@ def save_broadcast_log(log_entry):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     save_user(user_id)
-    await update.message.reply_text("👋 YaHa Proof Bhej De 👇👇.")
+    await update.message.reply_text("👋 YaHa Proof Bhej Do 👇👇.")
 
 async def broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
