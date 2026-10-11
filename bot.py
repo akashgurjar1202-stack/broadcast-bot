@@ -3,8 +3,7 @@ import asyncio
 import json
 import os
 from datetime import datetime
-import http.server
-import socketserver
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
 from telegram import Update
 from telegram.ext import (
@@ -16,12 +15,10 @@ from telegram.ext import (
     filters,
 )
 
-# Logging Setup
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
-# Configuration from Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
@@ -29,7 +26,6 @@ WAITING_FOR_BROADCAST_MSG = 1
 DB_FILE = "users_data.json"
 BROADCAST_LOG_FILE = "broadcast_history.json"
 
-# File Helpers
 def load_users():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r", encoding="utf-8") as f:
@@ -64,11 +60,10 @@ def save_broadcast_log(log_entry):
         json.dump(logs, f, indent=4, ensure_ascii=False)
     os.replace(temp_file, BROADCAST_LOG_FILE)
 
-# Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     save_user(user_id)
-    await update.message.reply_text("HAYA PROOF BHEJ DE 👇👇")
+    await update.message.reply_text("👋 YaHa Proof Bhej De 👇👇.")
 
 async def broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -144,11 +139,24 @@ async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Broadcast operation cancel kar diya gaya hai.")
     return ConversationHandler.END
 
-# Telegram Bot ko background thread me chalane ke liye
-def run_telegram_bot():
+def run_web_server():
+    port = int(os.getenv("PORT", 10000))
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        def log_message(self, format, *args):
+            return
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    server.serve_forever()
+
+def main():
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN nahi mila!")
         return
+
+    threading.Thread(target=run_web_server, daemon=True).start()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -167,24 +175,9 @@ def run_telegram_bot():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(broadcast_handler)
 
-    print("Telegram Bot polling shuru ho rahi hai...")
-    app.run_polling()
+    print("Bot polling start ho rahi hai...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    # Telegram Bot ko background me shuru karein
-    threading.Thread(target=run_telegram_bot, daemon=True).start()
-
-    # Render ke liye Main thread me HTTP Server chalayein taaki deployment successful dikhe
-    PORT = int(os.getenv("PORT", 10000))
-    class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is active and running successfully!")
-        def log_message(self, format, *args):
-            return
-
-    with socketserver.TCPServer(("", PORT), HealthCheckHandler) as httpd:
-        print(f"HTTP Server port {PORT} par chal raha hai...")
-        httpd.serve_forever()
-        
+    main()
+    
