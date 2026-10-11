@@ -3,6 +3,8 @@ import asyncio
 import json
 import os
 from datetime import datetime
+import http.server
+import threading
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -13,10 +15,25 @@ from telegram.ext import (
     filters,
 )
 
+# Logging Setup
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 
+# Render Web Service ke liye background HTTP Server (UptimeRobot ke liye)
+def run_http_server():
+    port = int(os.getenv("PORT", 10000))
+    class SimpleHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is alive and running!")
+        def log_message(self, format, *args):
+            return # Log spam rokne ke liye
+
+threading.Thread(target=run_http_server, daemon=True).start()
+
+# Configuration from Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
@@ -24,6 +41,7 @@ WAITING_FOR_BROADCAST_MSG = 1
 DB_FILE = "users_data.json"
 BROADCAST_LOG_FILE = "broadcast_history.json"
 
+# File Helpers
 def load_users():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r", encoding="utf-8") as f:
@@ -58,6 +76,7 @@ def save_broadcast_log(log_entry):
         json.dump(logs, f, indent=4, ensure_ascii=False)
     os.replace(temp_file, BROADCAST_LOG_FILE)
 
+# Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     save_user(user_id)
